@@ -1,9 +1,12 @@
+"use strict";
 // ####################################################################################################################
 // # Packages
 // #####################################################################################################################
 const express = require('express'),
 	bodyParser = require('body-parser'),
 	sequelize = require('sequelize'),
+	jwt = require('jsonwebtoken'),
+	bcrypt = require('bcrypt-nodejs'),
 	_ = require('lodash'),
 	async = require('async');
 
@@ -15,40 +18,22 @@ let app = express(),
 	scaffoldRouter = require('./lib/scaffoldRouter.js');
 
 // #####################################################################################################################
+// # Constants
+// #####################################################################################################################
+const jwtSecret = 'THIS_IS_SPARTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+
+// #####################################################################################################################
 // # Models
 // #####################################################################################################################
-var User = database.define('user', {
-	username: {
-		allowNull: false,
-		type: sequelize.STRING,
-		validate: {
-			notEmpty: true
-		}
-	},
-	birthday: sequelize.DATE
-});
+let models = require('./models.js');
 
 // #####################################################################################################################
 // # Database
 // #####################################################################################################################
-database.sync({force: true})
-		.then(()=>{
-			console.log('database synced');
-			return User.create({
-				username: 'michael',
-				birthday: new Date(1990, 4, 2)
-			})
-		})
-		.then((user)=>{
-			console.log(user.get({
-				plain: true
-			}))
-		});
+database.sync({force: true});
 
 app.use((req, res, next)=>{
-	req.models = {
-		User
-	}
+	req.models = models;
 	next();
 });
 
@@ -56,10 +41,44 @@ app.use((req, res, next)=>{
 // # Routes
 // #####################################################################################################################
 let indexRouter = express.Router();
-let usersRouter = scaffoldRouter(User);
+let authenticationRouter = express.Router();
+let usersRouter = scaffoldRouter(models.User);
 
 indexRouter.get('/', (req, res)=>{
 	res.json({});
+});
+
+// register
+authenticationRouter.post('/', (req, res)=>{
+	bcrypt.hash(req.body.password, null, null, (error, hash) => {
+		req.models.User.create({username: req.body.username, password: hash})
+			.then(()=>{
+				var token = jwt.sign({username: req.body.username}, jwtSecret);
+				res.json({token});
+			});
+	})
+});
+
+// login
+authenticationRouter.post('/token', (req, res)=>{
+	console.log(req.body);
+	req.models.User.findOne({where: {username: req.body.username}})
+		.then((user)=>{
+			if (user) {
+				bcrypt.compare(req.body.password, user.password, (error, correct) => {
+					if (correct){
+						var token = jwt.sign({username: user.username}, jwtSecret);
+						res.json({token});
+					} else {
+						res.status(401);
+						res.end();
+					}
+				});
+			} else {
+				res.status(401);
+				res.end();
+			}
+		});
 });
 
 // #####################################################################################################################
@@ -69,6 +88,7 @@ app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: true}));
 app.use('/', indexRouter);
 app.use('/users', usersRouter);
+app.use('/authentication', authenticationRouter);
 
 // #####################################################################################################################
 // # Start server
