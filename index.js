@@ -15,12 +15,13 @@ const express = require('express'),
 // #####################################################################################################################
 let app = express(),
 	database = require('./database.js'),
+	ensureAuthentication = require('./lib/ensureAuthentication.js'),
 	scaffoldRouter = require('./lib/scaffoldRouter.js');
 
 // #####################################################################################################################
 // # Constants
 // #####################################################################################################################
-const jwtSecret = 'THIS_IS_SPARTAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA';
+const constants = require('./constants.js');
 
 // #####################################################################################################################
 // # Models
@@ -43,6 +44,7 @@ app.use((req, res, next)=>{
 let indexRouter = express.Router();
 let authenticationRouter = express.Router();
 let usersRouter = scaffoldRouter(models.User);
+let eventsRouter = scaffoldRouter(models.Event);
 
 indexRouter.get('/', (req, res)=>{
 	res.json({});
@@ -53,7 +55,7 @@ authenticationRouter.post('/', (req, res)=>{
 	bcrypt.hash(req.body.password, null, null, (error, hash) => {
 		req.models.User.create({username: req.body.username, password: hash})
 			.then(()=>{
-				var token = jwt.sign({username: req.body.username}, jwtSecret);
+				var token = jwt.sign({username: req.body.username}, constants.jwtSecret);
 				res.json({token});
 			});
 	})
@@ -67,7 +69,7 @@ authenticationRouter.post('/token', (req, res)=>{
 			if (user) {
 				bcrypt.compare(req.body.password, user.password, (error, correct) => {
 					if (correct){
-						var token = jwt.sign({username: user.username}, jwtSecret);
+						var token = jwt.sign({username: user.username}, constants.jwtSecret);
 						res.json({token});
 					} else {
 						res.status(401);
@@ -87,7 +89,8 @@ authenticationRouter.post('/token', (req, res)=>{
 app.use(bodyParser.json());
 app.use(bodyParser.urlencoded({extended: true}));
 app.use('/', indexRouter);
-app.use('/users', usersRouter);
+app.use('/users', ensureAuthentication, usersRouter);
+app.use('/events', ensureAuthentication, eventsRouter);
 app.use('/authentication', authenticationRouter);
 
 // #####################################################################################################################

@@ -19,6 +19,17 @@ var User = database.define('user', {
 	}
 });
 
+var Event = database.define('event', {
+	name: {
+		allowNull: false,
+		type: sequelize.STRING,
+		validate: {
+			notEmpty: true
+		}
+	}
+});
+
 module.exports = {
-	User
+	User,
+	Event
 }
